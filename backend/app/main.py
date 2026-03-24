@@ -7,7 +7,7 @@ load_dotenv()
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.database import init_db
-from app.routes import auth
+from app.routes import auth, reports, usage
 
 
 @asynccontextmanager
@@ -27,6 +27,8 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(reports.router)
+app.include_router(usage.router)
 
 
 @app.get("/api/health")
