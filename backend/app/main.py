@@ -6,7 +6,7 @@ from fastapi import FastAPI
 load_dotenv()
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.core.database import init_db
+from app.core.database import init_db  # async — creates MongoDB indexes
 from app.core.logging import setup_logging
 from app.middleware import CorrelationMiddleware
 from app.routes import auth, reports, usage
@@ -16,7 +16,7 @@ setup_logging()
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    init_db()
+    await init_db()
     yield
 
 
