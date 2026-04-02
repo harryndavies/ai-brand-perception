@@ -1,6 +1,6 @@
 # Perception AI
 
-A brand intelligence platform that analyses how brands are perceived using Claude AI. It generates comprehensive reports covering sentiment analysis, brand pillar identification, competitive positioning, and historical trend tracking — all from a single API call.
+A brand intelligence platform that analyses how brands are perceived using Claude AI. It generates comprehensive reports covering sentiment analysis, brand pillar identification, competitive positioning, and historical trend tracking — with optional recurring scheduled analyses via Celery Beat.
 
 ## Architecture
 
@@ -30,31 +30,32 @@ A brand intelligence platform that analyses how brands are perceived using Claud
                          +---v----------v----+
                          |      Redis        |
                          | (broker + pubsub) |
-                         +---+----------+----+
-                             |          ^
-                      task queue     progress
-                             |      updates
-                         +---v----------+----+
-                         |  Celery Worker    |
-                         |  (decrypts user   |
-                         |   API key)        |
-                         +--------+----------+
-                                  |
-                         +--------v----------+
-                         |   Claude API      |
-                         |  (single call,    |
-                         |   3 perspectives) |
-                         +--------+----------+
-                                  |
-                         +--------v----------+
-                         |  Aggregate &      |
-                         |  Persist          |
-                         +--------+----------+
-                                  |
-                         +--------v----------+
-                         |    MongoDB        |
-                         | (users, reports)  |
-                         +-------------------+
+                         +---+-----+--------++
+                             |     |         |
+                      task queue   |    beat schedule
+                             |     |         |
+                         +---v-----+--+ +----v---------+
+                         |  Celery    | | Celery Beat  |
+                         |  Worker    | | (scheduler)  |
+                         +------+-----+ +----+---------+
+                                |             |
+                          decrypts user  checks due
+                          API key        schedules,
+                                |        dispatches
+                         +------v-----+  tasks every
+                         | Claude API |  60 seconds
+                         +------+-----+
+                                |
+                         +------v----------+
+                         |  Aggregate &    |
+                         |  Persist        |
+                         +------+----------+
+                                |
+                         +------v----------+
+                         |    MongoDB      |
+                         | (users, reports |
+                         |  schedules)     |
+                         +-----------------+
 ```
 
 ## User Flow
@@ -66,21 +67,26 @@ A brand intelligence platform that analyses how brands are perceived using Claud
   |                  |     |   (sidebar icon)  |     |   (modal)        |
   +------------------+     +------------------+     +--------+---------+
                                                              |
-                                                    Enter brand name
-                                                    + competitors
+                                                    Enter brand name,
+                                                    competitors, and
+                                                    optional "Repeat
+                                                    monthly" toggle
                                                              |
                                                     +--------v---------+
                                                     |   Submit Form    |
-                                                    +--------+---------+
-                                                             |
-                           +--------------------+            |
-                           |  SSE connection    |<-----------+
-                           |  opens, shows      |   API creates report,
-                           |  progress bar      |   queues Celery task
-                           +--------+-----------+
-                                    |
-                           Worker picks up task,
-                           decrypts user's API key,
+                                                    +---+----------+---+
+                                                        |          |
+                                              creates report   if repeat on,
+                                              + Celery task    creates schedule
+                                                        |          |
+                           +--------------------+       |          |
+                           |  SSE connection    |<------+          |
+                           |  opens, shows      |                  |
+                           |  progress bar      |    +-------------v---+
+                           +--------+-----------+    | Celery Beat     |
+                                    |                | auto-dispatches |
+                           Worker picks up task,     | every 30 days   |
+                           decrypts user's key,      +-----------------+
                            calls Claude API
                                     |
                            +--------v-----------+
@@ -102,6 +108,7 @@ A brand intelligence platform that analyses how brands are perceived using Claud
 ## Features
 
 - **Single-call AI analysis** -- One Claude API call returns brand perception, news sentiment, and competitor analysis in a structured JSON response
+- **Scheduled recurring analyses** -- Users can toggle "Repeat monthly" to auto-run analyses via Celery Beat, with a dashboard to view and cancel schedules
 - **Bring your own key** -- Users provide their own Anthropic API key, encrypted at rest with Fernet (AES-128) using a dedicated encryption key
 - **Event-driven processing** -- Celery workers consume analysis jobs from a Redis-backed message queue
 - **Real-time progress** -- Server-Sent Events deliver live updates via Redis pub/sub (no polling)
@@ -128,7 +135,7 @@ A brand intelligence platform that analyses how brands are perceived using Claud
 ### Backend
 
 - FastAPI (Python 3.12)
-- Celery (task queue)
+- Celery (task queue + Beat scheduler)
 - Redis (message broker + pub/sub progress)
 - MongoDB via Motor (async) + PyMongo (sync)
 - Anthropic SDK (Claude)
@@ -138,7 +145,7 @@ A brand intelligence platform that analyses how brands are perceived using Claud
 
 ### Infrastructure
 
-- Docker + Docker Compose
+- Docker + Docker Compose (6 services)
 - nginx (reverse proxy + SPA routing)
 - GitHub Actions CI (tests, type-check, build, Docker)
 
@@ -153,8 +160,8 @@ A brand intelligence platform that analyses how brands are perceived using Claud
 1. **Clone the repo**
 
    ```bash
-   git clone https://github.com/harryndavies/ai-brand-perception.git
-   cd ai-brand-perception
+   git clone https://github.com/harryndavies/brand-perception-ai.git
+   cd brand-perception-ai
    ```
 
 2. **Configure environment variables**
@@ -184,6 +191,7 @@ A brand intelligence platform that analyses how brands are perceived using Claud
    - **Frontend** (nginx) -- [http://localhost:3000](http://localhost:3000)
    - **Backend** (FastAPI) -- [http://localhost:8000](http://localhost:8000)
    - **Worker** (Celery) -- processes analysis jobs
+   - **Beat** (Celery Beat) -- dispatches scheduled analyses every 60s
    - **MongoDB** -- document database
    - **Redis** -- message broker and pub/sub progress
 
@@ -219,14 +227,14 @@ npm run test
 ├── backend/
 │   ├── Dockerfile
 │   └── app/
-│       ├── worker.py           # Celery app configuration
-│       ├── tasks.py            # Analysis Celery task (single Claude call)
-│       ├── models/             # Pydantic models (user, report)
-│       ├── routes/             # API endpoints (auth, reports)
+│       ├── worker.py           # Celery app + Beat schedule configuration
+│       ├── tasks.py            # Analysis task + schedule dispatcher
+│       ├── models/             # Pydantic models (user, report, schedule)
+│       ├── routes/             # API endpoints (auth, reports, schedules)
 │       ├── services/           # SSE streaming via Redis pub/sub
 │       ├── middleware.py        # Correlation ID + request logging
 │       └── core/               # Config, database, auth, encryption, logging, progress
-├── docker-compose.yml          # Full stack orchestration
+├── docker-compose.yml          # Full stack orchestration (6 services)
 ├── .github/workflows/ci.yml   # CI pipeline
 └── package.json                # Workspace root with dev scripts
 ```
@@ -234,13 +242,14 @@ npm run test
 ## How It Works
 
 1. User signs up and adds their Anthropic API key (encrypted with Fernet, stored in MongoDB)
-2. User opens the "New Analysis" modal, enters a brand name and optional competitors
-3. The API server validates input, checks rate limits, creates a report record, and dispatches a Celery task
+2. User opens the "New Analysis" modal, enters a brand name, optional competitors, and optionally toggles "Repeat monthly"
+3. The API server validates input, checks rate limits, creates a report record, and dispatches a Celery task. If repeat is enabled, a schedule record is also created.
 4. Redis progress state is seeded immediately so the SSE stream has data before the worker starts
 5. The Celery worker decrypts the user's API key and makes a single Claude API call with a structured prompt covering brand perception, news sentiment, and competitor analysis
 6. Progress updates are published via Redis pub/sub -- the SSE stream pushes them to the frontend in real time
 7. Results are aggregated, historical trend data is built from past analyses of the same brand, and the report is persisted to MongoDB
 8. The frontend navigates to the report page with interactive charts and tabbed views
+9. For scheduled analyses, Celery Beat checks every 60 seconds for due schedules, creates reports, and dispatches analysis tasks automatically — advancing the next run date each time
 
 ## API Endpoints
 
@@ -255,6 +264,9 @@ npm run test
 | `POST` | `/api/reports` | Create analysis (requires API key, rate limited) |
 | `GET` | `/api/reports/:id` | Get report details |
 | `GET` | `/api/reports/:id/stream` | SSE stream for analysis progress |
+| `GET` | `/api/schedules` | List active schedules |
+| `POST` | `/api/schedules` | Create a recurring schedule |
+| `DELETE` | `/api/schedules/:id` | Cancel a schedule |
 | `GET` | `/api/health` | Health check |
 
 ## Security
