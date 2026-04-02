@@ -2,6 +2,7 @@ import { NavLink } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { ApiKeyDialog } from "@/components/api-key-dialog";
 import { useAuthStore } from "@/stores/auth";
 import { cn } from "@/lib/utils";
 
@@ -124,12 +125,25 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             {!collapsed && (
               <div className="flex-1 truncate">
                 <p className="truncate text-xs font-medium">{user.name}</p>
-                <button
-                  onClick={logout}
-                  className="text-xs text-muted-foreground hover:text-foreground"
-                >
-                  Sign out
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={logout}
+                    className="text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    Sign out
+                  </button>
+                  <ApiKeyDialog trigger={
+                    <button className={cn(
+                      "text-xs hover:text-foreground",
+                      user.has_api_key ? "text-emerald-500" : "text-muted-foreground"
+                    )}>
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                        <path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z" />
+                        <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" />
+                      </svg>
+                    </button>
+                  } />
+                </div>
               </div>
             )}
           </div>

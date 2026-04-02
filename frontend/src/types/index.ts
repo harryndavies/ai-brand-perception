@@ -54,4 +54,5 @@ export interface User {
   email: string;
   name: string;
   team: string;
+  has_api_key: boolean;
 }

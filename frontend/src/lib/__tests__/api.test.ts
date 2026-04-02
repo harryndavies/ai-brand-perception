@@ -23,7 +23,7 @@ describe("api client", () => {
   });
 
   it("sends auth header when token exists", async () => {
-    const user = { id: "1", email: "a@b.com", name: "T", team: "D" };
+    const user = { id: "1", email: "a@b.com", name: "T", team: "D", has_api_key: false };
     useAuthStore.getState().setAuth(user, "my-token");
     mockResponse(user);
 
@@ -43,7 +43,7 @@ describe("api client", () => {
   });
 
   it("calls logout on 401 response", async () => {
-    const user = { id: "1", email: "a@b.com", name: "T", team: "D" };
+    const user = { id: "1", email: "a@b.com", name: "T", team: "D", has_api_key: false };
     useAuthStore.getState().setAuth(user, "my-token");
     mockResponse(null, 401);
 
@@ -84,7 +84,7 @@ describe("api client", () => {
   });
 
   it("reports.stream returns EventSource with token", () => {
-    const user = { id: "1", email: "a@b.com", name: "T", team: "D" };
+    const user = { id: "1", email: "a@b.com", name: "T", team: "D", has_api_key: false };
     useAuthStore.getState().setAuth(user, "stream-token");
 
     // EventSource not available in jsdom, so we just test the URL construction

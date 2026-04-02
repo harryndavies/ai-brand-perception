@@ -10,6 +10,7 @@ class User(BaseModel):
     email: EmailStr
     hashed_password: str
     team: str = "Default"
+    encrypted_api_key: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_doc(self) -> dict:

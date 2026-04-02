@@ -3,6 +3,7 @@ from pydantic import BaseModel, EmailStr, Field
 
 from app.core.auth import create_access_token, get_current_user, hash_password, verify_password
 from app.core.database import get_async_db
+from app.core.encryption import encrypt
 from app.models.user import User
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -24,6 +25,7 @@ class UserResponse(BaseModel):
     email: str
     name: str
     team: str
+    has_api_key: bool = False
 
 
 class AuthResponse(BaseModel):
@@ -48,7 +50,7 @@ async def signup(body: SignupRequest):
 
     token = create_access_token(user.id)
     return AuthResponse(
-        user=UserResponse(id=user.id, email=user.email, name=user.name, team=user.team),
+        user=_user_response(user),
         token=token,
     )
 
@@ -64,11 +66,45 @@ async def login(body: LoginRequest):
     user = User.from_doc(doc)
     token = create_access_token(user.id)
     return AuthResponse(
-        user=UserResponse(id=user.id, email=user.email, name=user.name, team=user.team),
+        user=_user_response(user),
         token=token,
     )
 
 
 @router.get("/me", response_model=UserResponse)
 async def me(user: User = Depends(get_current_user)):
-    return UserResponse(id=user.id, email=user.email, name=user.name, team=user.team)
+    return _user_response(user)
+
+
+class ApiKeyRequest(BaseModel):
+    api_key: str = Field(..., min_length=1, max_length=200)
+
+
+@router.put("/api-key")
+async def set_api_key(body: ApiKeyRequest, user: User = Depends(get_current_user)):
+    db = get_async_db()
+    encrypted = encrypt(body.api_key)
+    await db.users.update_one({"_id": user.id}, {"$set": {"encrypted_api_key": encrypted}})
+    # Invalidate user cache
+    from app.core.progress import _get_redis
+    _get_redis().delete(f"user:{user.id}")
+    return {"has_api_key": True}
+
+
+@router.delete("/api-key")
+async def delete_api_key(user: User = Depends(get_current_user)):
+    db = get_async_db()
+    await db.users.update_one({"_id": user.id}, {"$set": {"encrypted_api_key": None}})
+    from app.core.progress import _get_redis
+    _get_redis().delete(f"user:{user.id}")
+    return {"has_api_key": False}
+
+
+def _user_response(user: User) -> UserResponse:
+    return UserResponse(
+        id=user.id,
+        email=user.email,
+        name=user.name,
+        team=user.team,
+        has_api_key=user.encrypted_api_key is not None,
+    )

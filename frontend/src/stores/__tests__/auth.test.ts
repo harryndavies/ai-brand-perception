@@ -13,7 +13,7 @@ describe("useAuthStore", () => {
   });
 
   it("setAuth stores user and token", () => {
-    const user = { id: "1", email: "a@b.com", name: "Test", team: "Default" };
+    const user = { id: "1", email: "a@b.com", name: "Test", team: "Default", has_api_key: false };
     useAuthStore.getState().setAuth(user, "tok123");
 
     const state = useAuthStore.getState();
@@ -23,7 +23,7 @@ describe("useAuthStore", () => {
   });
 
   it("logout clears user, token, and localStorage", () => {
-    const user = { id: "1", email: "a@b.com", name: "Test", team: "Default" };
+    const user = { id: "1", email: "a@b.com", name: "Test", team: "Default", has_api_key: false };
     useAuthStore.getState().setAuth(user, "tok123");
     useAuthStore.getState().logout();
 

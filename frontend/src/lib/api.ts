@@ -39,6 +39,15 @@ export const api = {
         body: JSON.stringify({ name, email, password }),
       }),
     me: () => request<User>("/auth/me"),
+    setApiKey: (api_key: string) =>
+      request<{ has_api_key: boolean }>("/auth/api-key", {
+        method: "PUT",
+        body: JSON.stringify({ api_key }),
+      }),
+    deleteApiKey: () =>
+      request<{ has_api_key: boolean }>("/auth/api-key", {
+        method: "DELETE",
+      }),
   },
   reports: {
     list: () => request<BrandReport[]>("/reports"),
