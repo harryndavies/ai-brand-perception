@@ -55,25 +55,3 @@ export interface User {
   name: string;
   team: string;
 }
-
-export interface UsageSummary {
-  credits_used: number;
-  credits_total: number;
-  analyses_this_month: number;
-}
-
-export interface TeamMember {
-  id: string;
-  email: string;
-  name: string;
-  role: "admin" | "member";
-  joined_at: string;
-}
-
-export interface ApiKey {
-  id: string;
-  name: string;
-  prefix: string;
-  created_at: string;
-  last_used_at: string | null;
-}

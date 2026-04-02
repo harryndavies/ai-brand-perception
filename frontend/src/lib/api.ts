@@ -1,11 +1,5 @@
 import { useAuthStore } from "@/stores/auth";
-import type {
-  BrandReport,
-  User,
-  UsageSummary,
-  TeamMember,
-  ApiKey,
-} from "@/types";
+import type { BrandReport, User } from "@/types";
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? "/api";
 
@@ -59,28 +53,5 @@ export const api = {
       const url = `${BASE_URL}/reports/${id}/stream?token=${token}`;
       return new EventSource(url);
     },
-  },
-  usage: {
-    get: () => request<UsageSummary>("/usage"),
-  },
-  team: {
-    list: () => request<TeamMember[]>("/team"),
-    invite: (email: string, role: "admin" | "member") =>
-      request<TeamMember>("/team/invite", {
-        method: "POST",
-        body: JSON.stringify({ email, role }),
-      }),
-    remove: (id: string) =>
-      request<void>(`/team/${id}`, { method: "DELETE" }),
-  },
-  keys: {
-    list: () => request<ApiKey[]>("/keys"),
-    create: (name: string) =>
-      request<ApiKey & { key: string }>("/keys", {
-        method: "POST",
-        body: JSON.stringify({ name }),
-      }),
-    revoke: (id: string) =>
-      request<void>(`/keys/${id}`, { method: "DELETE" }),
   },
 };

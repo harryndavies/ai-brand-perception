@@ -13,76 +13,6 @@ import { TrendChart } from "@/components/report/trend-chart";
 import { api } from "@/lib/api";
 import type { BrandReport } from "@/types";
 
-const DEMO_REPORT: BrandReport = {
-  id: "demo",
-  brand: "Arc'teryx",
-  competitors: ["Patagonia", "The North Face", "Salomon"],
-  status: "complete",
-  sentiment_score: 0.74,
-  pillars: [
-    {
-      name: "Technical Performance",
-      description: "Widely recognised for industry-leading Gore-Tex Pro construction and minimalist design that prioritises function.",
-      confidence: 0.92,
-      sources: ["Claude"],
-    },
-    {
-      name: "Premium Positioning",
-      description: "Consistently perceived as a premium brand with pricing that reflects technical innovation and build quality.",
-      confidence: 0.88,
-      sources: ["Claude"],
-    },
-    {
-      name: "Sustainability",
-      description: "Growing recognition of repair and reuse programs, though some concern about fast fashion crossover.",
-      confidence: 0.65,
-      sources: ["Claude"],
-    },
-    {
-      name: "Cultural Cachet",
-      description: "Strong urban adoption beyond outdoor use. The brand bridges technical outdoor and streetwear markets.",
-      confidence: 0.78,
-      sources: ["Claude"],
-    },
-  ],
-  model_perceptions: [
-    {
-      model: "Brand Perception",
-      summary: "Sees Arc'teryx as the gold standard in technical outerwear with genuine innovation credentials, though notes growing hype risk.",
-      sentiment: 0.82,
-      key_themes: ["technical excellence", "premium quality", "urban adoption"],
-    },
-    {
-      model: "News Sentiment",
-      summary: "Highlights durability and warranty as key differentiators. Flags sustainability as an area needing stronger communication.",
-      sentiment: 0.71,
-      key_themes: ["durability", "warranty", "sustainability gap"],
-    },
-    {
-      model: "Competitor Analysis",
-      summary: "Focuses on the brand's cultural shift from niche outdoor to mainstream fashion, seeing both opportunity and dilution risk.",
-      sentiment: 0.68,
-      key_themes: ["cultural crossover", "brand dilution risk", "fashion trend"],
-    },
-  ],
-  competitor_positions: [
-    { brand: "Arc'teryx", premium_score: 0.9, lifestyle_score: 0.55 },
-    { brand: "Patagonia", premium_score: 0.7, lifestyle_score: 0.4 },
-    { brand: "The North Face", premium_score: 0.5, lifestyle_score: 0.7 },
-    { brand: "Salomon", premium_score: 0.65, lifestyle_score: 0.45 },
-  ],
-  trend_data: [
-    { date: "2025-10-01", sentiment: 0.65, volume: 1200 },
-    { date: "2025-11-01", sentiment: 0.68, volume: 1450 },
-    { date: "2025-12-01", sentiment: 0.72, volume: 1800 },
-    { date: "2026-01-01", sentiment: 0.7, volume: 1600 },
-    { date: "2026-02-01", sentiment: 0.73, volume: 1700 },
-    { date: "2026-03-01", sentiment: 0.74, volume: 1900 },
-  ],
-  created_at: "2026-04-01T10:00:00Z",
-  completed_at: "2026-04-01T10:02:34Z",
-};
-
 function ReportSkeleton() {
   return (
     <div className="space-y-6">
@@ -137,7 +67,9 @@ function ReportContent({ report }: { report: BrandReport }) {
         <TabsList>
           <TabsTrigger value="pillars">Brand Pillars</TabsTrigger>
           <TabsTrigger value="models">Analysis Comparison</TabsTrigger>
-          <TabsTrigger value="competitors">Competitors</TabsTrigger>
+          {report.competitors.length > 0 && (
+            <TabsTrigger value="competitors">Competitors</TabsTrigger>
+          )}
           <TabsTrigger value="trends">Trends</TabsTrigger>
         </TabsList>
 
@@ -149,12 +81,14 @@ function ReportContent({ report }: { report: BrandReport }) {
           <ModelComparison models={report.model_perceptions} />
         </TabsContent>
 
-        <TabsContent value="competitors" className="mt-6">
-          <CompetitorChart
-            positions={report.competitor_positions}
-            primaryBrand={report.brand}
-          />
-        </TabsContent>
+        {report.competitors.length > 0 && (
+          <TabsContent value="competitors" className="mt-6">
+            <CompetitorChart
+              positions={report.competitor_positions}
+              primaryBrand={report.brand}
+            />
+          </TabsContent>
+        )}
 
         <TabsContent value="trends" className="mt-6">
           <TrendChart data={report.trend_data} />
@@ -173,11 +107,19 @@ export function ReportPage() {
     enabled: !!id,
   });
 
-  // Use demo data as fallback when API is unavailable
-  const report = data ?? (isError || !isLoading ? DEMO_REPORT : null);
+  if (isLoading) return <ReportSkeleton />;
+  if (isError || !data) {
+    return (
+      <div className="space-y-4 text-center py-12">
+        <p className="text-muted-foreground">Report not found or failed to load.</p>
+        <Button variant="outline" render={<Link to="/" />}>
+          Back to Dashboard
+        </Button>
+      </div>
+    );
+  }
 
-  if (isLoading && !report) return <ReportSkeleton />;
-  if (!report) return <ReportSkeleton />;
+  const report = data;
 
   return <ReportContent report={report} />;
 }
