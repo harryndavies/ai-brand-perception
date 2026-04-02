@@ -6,10 +6,11 @@ from fastapi import FastAPI
 load_dotenv()
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.core.config import CORS_ORIGINS
 from app.core.database import init_db  # async — creates MongoDB indexes
 from app.core.logging import setup_logging
 from app.middleware import CorrelationMiddleware
-from app.routes import auth, reports, usage
+from app.routes import auth, reports
 
 setup_logging()
 
@@ -27,7 +28,7 @@ app.add_middleware(CorrelationMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -35,7 +36,6 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(reports.router)
-app.include_router(usage.router)
 
 
 @app.get("/api/health")

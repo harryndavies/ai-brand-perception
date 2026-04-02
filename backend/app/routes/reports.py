@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.core.auth import get_current_user
 from app.core.database import get_async_db
+from app.core.progress import _get_redis, init as init_progress
 from app.models.report import Report
 from app.models.user import User
-from app.core.progress import init as init_progress
 from app.services.analysis import stream_progress
 from app.tasks import run_analysis
 
@@ -14,8 +14,8 @@ router = APIRouter(prefix="/api/reports", tags=["reports"])
 
 
 class CreateReportRequest(BaseModel):
-    brand: str
-    competitors: list[str] = []
+    brand: str = Field(..., min_length=1, max_length=100)
+    competitors: list[str] = Field(default=[], max_length=3)
 
 
 @router.get("")
@@ -35,17 +35,33 @@ async def get_report(report_id: str, user: User = Depends(get_current_user)):
     return Report.from_doc(doc).model_dump()
 
 
+_RATE_LIMIT_WINDOW = 60  # seconds
+_RATE_LIMIT_MAX = 5  # max analyses per window
+
+
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_report(
     body: CreateReportRequest,
     user: User = Depends(get_current_user),
 ):
+    # Rate limit per user
+    r = _get_redis()
+    rate_key = f"ratelimit:create:{user.id}"
+    count = r.incr(rate_key)
+    if count == 1:
+        r.expire(rate_key, _RATE_LIMIT_WINDOW)
+    if count > _RATE_LIMIT_MAX:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Rate limit exceeded. Try again shortly.",
+        )
+
     db = get_async_db()
 
     report = Report(
         user_id=user.id,
         brand=body.brand,
-        competitors=body.competitors[:3],
+        competitors=body.competitors,
         status="processing",
     )
     await db.reports.insert_one(report.to_doc())
