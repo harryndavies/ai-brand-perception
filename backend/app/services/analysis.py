@@ -29,34 +29,40 @@ def get_job_state(report_id: str) -> dict | None:
 
 
 async def stream_progress(report_id: str) -> AsyncGenerator[str, None]:
-    """Yield SSE events for a running analysis, reading from Redis."""
+    """Yield SSE events for a running analysis using Redis pub/sub."""
+    import redis as sync_redis
+    from app.core.progress import REDIS_URL
+
+    r = sync_redis.from_url(REDIS_URL, decode_responses=True)
+    pubsub = r.pubsub()
+    pubsub.subscribe(f"progress:channel:{report_id}")
+
     prev_state = ""
-    stale_count = 0
+    deadline = asyncio.get_event_loop().time() + 120  # 2 min timeout
 
-    while True:
-        state = progress.get_state(report_id)
-        if not state:
-            yield f"event: error\ndata: {{\"message\": \"Report not found\"}}\n\n"
-            return
+    try:
+        while asyncio.get_event_loop().time() < deadline:
+            state = progress.get_state(report_id)
+            if not state:
+                yield f"event: error\ndata: {{\"message\": \"Report not found\"}}\n\n"
+                return
 
-        current = json.dumps(state["jobs"])
-        if current != prev_state:
-            yield f"event: progress\ndata: {current}\n\n"
-            prev_state = current
-            stale_count = 0
-        else:
-            stale_count += 1
+            current = json.dumps(state["jobs"])
+            if current != prev_state:
+                yield f"event: progress\ndata: {current}\n\n"
+                prev_state = current
 
-        if state["status"] == "complete":
-            yield f"event: complete\ndata: {{\"report_id\": \"{report_id}\"}}\n\n"
-            return
+            if state["status"] == "complete":
+                yield f"event: complete\ndata: {{\"report_id\": \"{report_id}\"}}\n\n"
+                return
 
-        if state["status"] == "failed":
-            yield f"event: error\ndata: {{\"message\": \"Analysis failed\"}}\n\n"
-            return
+            if state["status"] == "failed":
+                yield f"event: error\ndata: {{\"message\": \"Analysis failed\"}}\n\n"
+                return
 
-        if stale_count > 120:  # 60s timeout
-            yield f"event: error\ndata: {{\"message\": \"Timeout\"}}\n\n"
-            return
-
-        await asyncio.sleep(0.5)
+            # Wait for pub/sub notification instead of blind polling
+            await asyncio.to_thread(pubsub.get_message, ignore_subscribe_messages=True, timeout=2.0)
+    finally:
+        pubsub.unsubscribe()
+        pubsub.close()
+        r.close()

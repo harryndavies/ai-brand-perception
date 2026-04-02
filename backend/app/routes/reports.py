@@ -51,7 +51,7 @@ async def create_report(
     await db.reports.insert_one(report.to_doc())
 
     # Seed Redis so SSE stream has data before the worker picks up the task
-    init_progress(report.id, ["ai-perception", "news-sentiment", "competitor-analysis"])
+    init_progress(report.id, ["analysis"])
 
     # Dispatch analysis to Celery worker via Redis broker
     run_analysis.delay(report.id, report.brand, report.competitors)

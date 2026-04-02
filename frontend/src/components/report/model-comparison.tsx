@@ -25,7 +25,7 @@ export function ModelComparison({ models }: ModelComparisonProps) {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-32">Model</TableHead>
+            <TableHead className="w-40">Analysis</TableHead>
             <TableHead>Summary</TableHead>
             <TableHead className="w-28">Sentiment</TableHead>
             <TableHead>Key Themes</TableHead>

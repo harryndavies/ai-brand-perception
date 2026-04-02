@@ -22,78 +22,51 @@ from app.worker import celery_app
 setup_logging()
 logger = logging.getLogger(__name__)
 
+_anthropic_client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
-# ── Prompts ──────────────────────────────────────────────────────────────────
 
-BRAND_ANALYSIS_PROMPT = """Analyse the brand "{brand}" and return a JSON object with exactly this structure.
-Do not include any text outside the JSON.
+# ── Prompt ──────────────────────────────────────────────────────────────────
 
-Competitors for context: {competitors}
+ANALYSIS_PROMPT = """Analyse the brand "{brand}" with competitors [{competitors}].
 
-Return this exact JSON structure:
+Return a single JSON object with exactly this structure. Do not include any text outside the JSON.
+
 {{
-  "summary": "2-3 sentence analysis of how this brand is perceived",
-  "sentiment": <float between -1.0 and 1.0>,
-  "key_themes": ["theme1", "theme2", "theme3"],
+  "brand_perception": {{
+    "summary": "2-3 sentence analysis of how this brand is perceived",
+    "sentiment": <float between -1.0 and 1.0>,
+    "key_themes": ["theme1", "theme2", "theme3"]
+  }},
+  "news_sentiment": {{
+    "summary": "2-3 sentence analysis focused on news sentiment and public perception",
+    "sentiment": <float between -1.0 and 1.0>,
+    "key_themes": ["theme1", "theme2", "theme3"]
+  }},
+  "competitor_analysis": {{
+    "summary": "2-3 sentence analysis of competitive dynamics",
+    "sentiment": <float between -1.0 and 1.0>,
+    "key_themes": ["theme1", "theme2", "theme3"],
+    "competitor_positions": [
+      {{
+        "brand": "Brand Name",
+        "premium_score": <float 0-1, where 1 is ultra-premium>,
+        "lifestyle_score": <float 0-1, where 0 is purely functional and 1 is purely lifestyle>
+      }}
+    ]
+  }},
   "pillars": [
     {{
       "name": "Pillar Name",
       "description": "1-2 sentence description of this brand pillar",
-      "confidence": <float between 0.0 and 1.0>
+      "confidence": <float between 0.0 and 1.0>,
+      "sources": ["Claude"]
     }}
   ]
 }}
 
-Provide 3-5 brand pillars. Be specific and insightful, not generic. Ground your analysis in real brand perception."""
-
-
-COMPETITOR_PROMPT = """Analyse the competitive positioning of "{brand}" against these competitors: {competitors}.
-
-Return a JSON object with exactly this structure. Do not include any text outside the JSON.
-
-{{
-  "summary": "2-3 sentence analysis of competitive dynamics",
-  "sentiment": <float between -1.0 and 1.0 representing overall brand health vs competitors>,
-  "key_themes": ["theme1", "theme2", "theme3"],
-  "pillars": [
-    {{
-      "name": "Pillar Name",
-      "description": "1-2 sentence description",
-      "confidence": <float between 0.0 and 1.0>
-    }}
-  ],
-  "competitor_positions": [
-    {{
-      "brand": "Brand Name",
-      "premium_score": <float 0-1, where 1 is ultra-premium>,
-      "lifestyle_score": <float 0-1, where 0 is purely functional and 1 is purely lifestyle>
-    }}
-  ]
-}}
-
-Include positioning for "{brand}" and each competitor. Be specific about where each brand sits."""
-
-
-NEWS_PROMPT = """You are acting as a news sentiment analyst. Analyse the brand "{brand}" specifically through the lens of recent news coverage, public sentiment, and media perception.
-
-Competitors for context: {competitors}
-
-Return a JSON object with exactly this structure. Do not include any text outside the JSON.
-
-{{
-  "summary": "2-3 sentence analysis focused on news sentiment and public perception",
-  "sentiment": <float between -1.0 and 1.0>,
-  "key_themes": ["theme1", "theme2", "theme3"],
-  "pillars": [
-    {{
-      "name": "Pillar Name",
-      "description": "1-2 sentence description from a news/media perspective",
-      "confidence": <float between 0.0 and 1.0>
-    }}
-  ]
-}}
-
-Provide 2-3 pillars focused on media narrative, public controversies or praise, and brand reputation trends."""
+Include 4-6 brand pillars covering perception, media narrative, and competitive positioning.
+Include positioning for "{brand}" and each competitor in competitor_positions.
+Be specific and insightful, not generic. Ground your analysis in real brand perception."""
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -122,94 +95,15 @@ def _generate_trend(current_sentiment: float) -> list[dict]:
     return data
 
 
-# ── AI calls (sync wrappers around async SDK) ───────────────────────────────
-
-def _call_claude(brand: str, competitors: list[str]) -> dict:
-    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-    competitor_str = ", ".join(competitors) if competitors else "general market"
-    prompt = BRAND_ANALYSIS_PROMPT.format(brand=brand, competitors=competitor_str)
-
-    message = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=1024,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    parsed = _parse_json(message.content[0].text)
-    for pillar in parsed.get("pillars", []):
-        pillar["sources"] = ["Claude"]
-    return {"model": "Claude", **parsed}
-
-
-def _call_openai(brand: str, competitors: list[str]) -> dict:
-    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-    competitor_str = ", ".join(competitors) if competitors else "general market"
-    prompt = NEWS_PROMPT.format(brand=brand, competitors=competitor_str)
-
-    message = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=1024,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    parsed = _parse_json(message.content[0].text)
-    for pillar in parsed.get("pillars", []):
-        pillar["sources"] = ["GPT-4", "News"]
-    return {"model": "GPT-4", **parsed}
-
-
-def _call_gemini(brand: str, competitors: list[str]) -> dict:
-    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-    competitor_str = ", ".join(competitors) if competitors else "Nike, Adidas, Patagonia"
-    prompt = COMPETITOR_PROMPT.format(brand=brand, competitors=competitor_str)
-
-    message = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=1024,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    parsed = _parse_json(message.content[0].text)
-    for pillar in parsed.get("pillars", []):
-        pillar["sources"] = ["Gemini", "Reddit"]
-    return {"model": "Gemini", **parsed}
-
-
-def _run_job(report_id: str, job_id: str, call_fn, brand: str, competitors: list[str]) -> dict:
-    """Run a single AI call with progress updates via Redis."""
-    progress.emit(report_id, job_id, "running", 0)
-    start = time.perf_counter()
-
-    # Simulate incremental progress while the API call runs
-    import concurrent.futures
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-        future = pool.submit(call_fn, brand, competitors)
-        for i in range(1, 10):
-            if future.done():
-                break
-            progress.emit(report_id, job_id, "running", i * 10)
-            time.sleep(0.5)
-
-    result = future.result()
-    duration_ms = round((time.perf_counter() - start) * 1000, 1)
-    progress.emit(report_id, job_id, "complete", 100, result)
-
-    logger.info(
-        "Job %s completed in %.0fms",
-        job_id,
-        duration_ms,
-        extra={"report_id": report_id, "job_id": job_id, "duration_ms": duration_ms, "model": result.get("model")},
-    )
-    return result
-
-
 # ── Main Celery task ─────────────────────────────────────────────────────────
 
 @celery_app.task(name="app.tasks.run_analysis", bind=True, max_retries=2)
 def run_analysis(self, report_id: str, brand: str, competitors: list[str]):
-    """Fan out to all AI models and aggregate results.
+    """Run a single Claude call to analyse a brand.
 
     Runs as a Celery task in a worker process. Progress is published to
     Redis so the API server can stream SSE updates to the client.
     """
-    # Set correlation ID for this task so all logs are traceable
     cid = report_id[:8]
     correlation_id.set(cid)
 
@@ -219,36 +113,43 @@ def run_analysis(self, report_id: str, brand: str, competitors: list[str]):
         brand,
         extra={"report_id": report_id, "brand": brand, "task_name": "run_analysis"},
     )
-    progress.set_status(report_id, "processing")
+    progress.emit(report_id, "analysis", "running", 0)
 
     try:
-        claude_result = _run_job(report_id, "ai-perception", _call_claude, brand, competitors)
-        openai_result = _run_job(report_id, "news-sentiment", _call_openai, brand, competitors)
-        gemini_result = _run_job(report_id, "competitor-analysis", _call_gemini, brand, competitors)
+        competitor_str = ", ".join(competitors) if competitors else "general market"
+        prompt = ANALYSIS_PROMPT.format(brand=brand, competitors=competitor_str)
 
-        # Aggregate results
-        all_perceptions = [claude_result, openai_result, gemini_result]
+        message = _anthropic_client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=2048,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        result = _parse_json(message.content[0].text)
+
+        # Build model_perceptions from the three sections
+        sections = [
+            ("Brand Perception", result["brand_perception"]),
+            ("News Sentiment", result["news_sentiment"]),
+            ("Competitor Analysis", result["competitor_analysis"]),
+        ]
         model_perceptions = [
             {
-                "model": r["model"],
-                "summary": r["summary"],
-                "sentiment": r["sentiment"],
-                "key_themes": r["key_themes"],
+                "model": label,
+                "summary": section["summary"],
+                "sentiment": section["sentiment"],
+                "key_themes": section["key_themes"],
             }
-            for r in all_perceptions
+            for label, section in sections
         ]
 
-        pillars = []
-        seen_pillars: set[str] = set()
-        for r in all_perceptions:
-            for p in r.get("pillars", []):
-                if p["name"] not in seen_pillars:
-                    pillars.append(p)
-                    seen_pillars.add(p["name"])
+        pillars = result.get("pillars", [])
+        competitor_positions = result.get("competitor_analysis", {}).get("competitor_positions", [])
 
-        competitor_positions = gemini_result.get("competitor_positions", [])
-        avg_sentiment = round(sum(r["sentiment"] for r in all_perceptions) / len(all_perceptions), 2)
+        sentiments = [s["sentiment"] for _, s in sections]
+        avg_sentiment = round(sum(sentiments) / len(sentiments), 2)
         trend_data = _generate_trend(avg_sentiment)
+
+        progress.emit(report_id, "analysis", "complete", 100)
 
         # Persist to database
         db = get_sync_db()
@@ -281,7 +182,6 @@ def run_analysis(self, report_id: str, brand: str, competitors: list[str]):
             },
         )
 
-        # Publish completion event for downstream consumers
         progress.publish_event(report_id, "analysis.complete", {
             "report_id": report_id,
             "brand": brand,

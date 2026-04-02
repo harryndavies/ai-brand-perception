@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Card,
   CardContent,
@@ -15,60 +14,19 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { api } from "@/lib/api";
-import type { AnalysisJob, JobStatus } from "@/types";
-
-const JOB_LABELS: Record<string, string> = {
-  "ai-perception": "AI Perception Analysis",
-  "news-sentiment": "News Sentiment Scan",
-  "competitor-analysis": "Competitor Analysis",
-};
-
-const JOB_ICON: Record<string, React.ReactNode> = {
-  "ai-perception": (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-      <path d="M12 2a8 8 0 0 0-8 8c0 6 8 12 8 12s8-6 8-12a8 8 0 0 0-8-8Z" />
-      <circle cx="12" cy="10" r="3" />
-    </svg>
-  ),
-  "news-sentiment": (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-      <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2" />
-      <path d="M18 14h-8" />
-      <path d="M15 18h-5" />
-      <path d="M10 6h8v4h-8V6Z" />
-    </svg>
-  ),
-  "competitor-analysis": (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-    </svg>
-  ),
-};
-
-const STATUS_COLOR: Record<JobStatus, string> = {
-  idle: "text-muted-foreground",
-  pending: "text-amber-500",
-  running: "text-indigo-500",
-  complete: "text-emerald-500",
-  failed: "text-destructive",
-};
-
-const INITIAL_JOBS: AnalysisJob[] = [
-  { id: "ai-perception", label: "AI Perception Analysis", status: "idle", progress: 0 },
-  { id: "news-sentiment", label: "News Sentiment Scan", status: "idle", progress: 0 },
-  { id: "competitor-analysis", label: "Competitor Analysis", status: "idle", progress: 0 },
-];
+import type { JobStatus } from "@/types";
 
 export function NewAnalysisPage() {
   const navigate = useNavigate();
   const [brand, setBrand] = useState("");
   const [competitors, setCompetitors] = useState(["", "", ""]);
   const [isRunning, setIsRunning] = useState(false);
-  const [jobs, setJobs] = useState<AnalysisJob[]>(INITIAL_JOBS);
+  const [status, setStatus] = useState<JobStatus>("idle");
   const eventSourceRef = useRef<EventSource | null>(null);
+
+  useEffect(() => {
+    return () => { eventSourceRef.current?.close(); };
+  }, []);
 
   const connectSSE = useCallback(
     (reportId: string) => {
@@ -80,27 +38,20 @@ export function NewAnalysisPage() {
           string,
           { id: string; status: JobStatus; progress: number }
         >;
-        setJobs((prev) =>
-          prev.map((job) => {
-            const update = data[job.id];
-            if (!update) return job;
-            return {
-              ...job,
-              status: update.status,
-              progress: update.progress,
-            };
-          })
-        );
+        const analysis = data["analysis"];
+        if (analysis) {
+          setStatus(analysis.status);
+        }
       });
 
       es.addEventListener("complete", () => {
         es.close();
-        // Brief pause so user sees all jobs complete before navigating
-        setTimeout(() => navigate(`/reports/${reportId}`), 800);
+        setTimeout(() => navigate(`/reports/${reportId}`), 600);
       });
 
       es.addEventListener("error", () => {
         es.close();
+        setStatus("failed");
       });
     },
     [navigate]
@@ -121,7 +72,7 @@ export function NewAnalysisPage() {
     if (!brand.trim()) return;
 
     setIsRunning(true);
-    setJobs(INITIAL_JOBS);
+    setStatus("pending");
     mutation.mutate();
   }
 
@@ -133,12 +84,24 @@ export function NewAnalysisPage() {
     });
   }
 
+  const statusLabel =
+    status === "pending" ? "Queued" :
+    status === "running" ? "Analysing" :
+    status === "complete" ? "Complete" :
+    status === "failed" ? "Failed" : "Waiting";
+
+  const badgeVariant =
+    status === "complete" ? "default" as const :
+    status === "failed" ? "destructive" as const :
+    status === "running" ? "secondary" as const :
+    "outline" as const;
+
   return (
     <div className="mx-auto max-w-2xl space-y-8">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">New Analysis</h1>
         <p className="text-muted-foreground">
-          Enter a brand to analyse its perception across AI models and data sources.
+          Enter a brand to analyse its perception using Claude AI.
         </p>
       </div>
 
@@ -180,52 +143,34 @@ export function NewAnalysisPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">
-                Analysing <span className="text-indigo-500">{brand}</span>
-              </CardTitle>
-              <CardDescription>
-                Running parallel analysis across AI models and data sources.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {jobs.map((job) => (
-                <div key={job.id} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className={STATUS_COLOR[job.status]}>
-                        {JOB_ICON[job.id]}
-                      </span>
-                      <span className="text-sm font-medium">
-                        {JOB_LABELS[job.id] ?? job.label}
-                      </span>
-                    </div>
-                    <Badge
-                      variant={
-                        job.status === "complete"
-                          ? "default"
-                          : job.status === "running"
-                            ? "secondary"
-                            : "outline"
-                      }
-                    >
-                      {job.status}
-                    </Badge>
-                  </div>
-                  {job.status === "running" ? (
-                    <Progress value={job.progress} className="h-1.5" />
-                  ) : job.status === "idle" ? (
-                    <Skeleton className="h-1.5 w-full" />
-                  ) : (
-                    <Progress value={100} className="h-1.5" />
-                  )}
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              Analysing <span className="text-indigo-500">{brand}</span>
+            </CardTitle>
+            <CardDescription>
+              Running brand perception, news sentiment, and competitor analysis.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Analysis</span>
+              <Badge variant={badgeVariant}>{statusLabel}</Badge>
+            </div>
+            {status === "running" ? (
+              <Progress value={50} className="h-2" />
+            ) : status === "complete" ? (
+              <Progress value={100} className="h-2" />
+            ) : (
+              <Progress value={0} className="h-2" />
+            )}
+            {status === "failed" && (
+              <p className="text-sm text-destructive">
+                Something went wrong. Please try again.
+              </p>
+            )}
+          </CardContent>
+        </Card>
       )}
     </div>
   );

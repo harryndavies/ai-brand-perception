@@ -64,7 +64,7 @@ export function SentimentGauge({ score, brand }: SentimentGaugeProps) {
           <div>
             <p className={`text-lg font-semibold ${color}`}>{label}</p>
             <p className="text-sm text-muted-foreground">
-              Aggregate sentiment for {brand} across all AI models and data sources.
+              Aggregate sentiment for {brand} across all analysis perspectives.
             </p>
           </div>
         </div>

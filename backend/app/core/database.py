@@ -24,17 +24,21 @@ def get_async_db():
     return _async_client[DB_NAME]
 
 
+_sync_client: MongoClient | None = None
+
+
 def get_sync_db():
     """Sync client for Celery worker processes."""
     if _test_db is not None:
         return _test_db
-    client = MongoClient(MONGODB_URL)
-    return client[DB_NAME]
+    global _sync_client
+    if _sync_client is None:
+        _sync_client = MongoClient(MONGODB_URL)
+    return _sync_client[DB_NAME]
 
 
 async def init_db():
     """Create indexes on startup."""
     db = get_async_db()
     await db.users.create_index("email", unique=True)
-    await db.reports.create_index("user_id")
-    await db.reports.create_index("created_at")
+    await db.reports.create_index([("user_id", 1), ("created_at", -1)])

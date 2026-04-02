@@ -38,8 +38,12 @@ def init(report_id: str, job_ids: list[str]):
     r.set(_key(report_id), json.dumps(state), ex=600)
 
 
+def _channel(report_id: str) -> str:
+    return f"progress:channel:{report_id}"
+
+
 def emit(report_id: str, job_id: str, status: str, progress: float, data: dict | None = None):
-    """Update a single job's progress in Redis."""
+    """Update a single job's progress in Redis and notify subscribers."""
     r = _get_redis()
     key = _key(report_id)
 
@@ -52,6 +56,7 @@ def emit(report_id: str, job_id: str, status: str, progress: float, data: dict |
     }
 
     r.set(key, json.dumps(state), ex=600)  # expire after 10 min
+    r.publish(_channel(report_id), "update")
 
 
 def set_status(report_id: str, status: str):
@@ -62,6 +67,7 @@ def set_status(report_id: str, status: str):
     state = get_state(report_id) or {"jobs": {}, "status": "processing"}
     state["status"] = status
     r.set(key, json.dumps(state), ex=600)
+    r.publish(_channel(report_id), "update")
 
 
 def get_state(report_id: str) -> dict | None:
