@@ -1,5 +1,5 @@
 import { useAuthStore } from "@/stores/auth";
-import type { BrandReport, User } from "@/types";
+import type { BrandReport, User, Schedule } from "@/types";
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? "/api";
 
@@ -62,5 +62,15 @@ export const api = {
       const url = `${BASE_URL}/reports/${id}/stream?token=${token}`;
       return new EventSource(url);
     },
+  },
+  schedules: {
+    list: () => request<Schedule[]>("/schedules"),
+    create: (brand: string, competitors: string[], interval_days: number) =>
+      request<Schedule>("/schedules", {
+        method: "POST",
+        body: JSON.stringify({ brand, competitors, interval_days }),
+      }),
+    remove: (id: string) =>
+      request<{ ok: boolean }>(`/schedules/${id}`, { method: "DELETE" }),
   },
 };

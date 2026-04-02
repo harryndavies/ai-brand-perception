@@ -31,6 +31,18 @@ services:
       - mongo
       - redis
 
+  beat:
+    build: ./backend
+    command: uv run celery -A app.worker beat --loglevel=info
+    env_file:
+      - .env
+    environment:
+      - MONGODB_URL=mongodb://mongo:27017
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - mongo
+      - redis
+
   mongo:
     image: mongo:7
     ports:

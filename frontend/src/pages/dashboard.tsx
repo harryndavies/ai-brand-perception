@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -9,6 +9,16 @@ import {
   CardHeader,
 } from "@/components/ui/card";
 import { NewAnalysisDialog } from "@/components/new-analysis-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogClose,
+} from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -175,6 +185,74 @@ function ReportsTable({ reports, isLoading }: { reports: BrandReport[]; isLoadin
   );
 }
 
+function SchedulesSection() {
+  const queryClient = useQueryClient();
+  const { data: schedules, isLoading } = useQuery({
+    queryKey: ["schedules"],
+    queryFn: api.schedules.list,
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: (id: string) => api.schedules.remove(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["schedules"] }),
+  });
+
+  if (isLoading) return <Skeleton className="h-20 w-full" />;
+  if (!schedules?.length) return null;
+
+  return (
+    <div className="space-y-3">
+      <h2 className="text-sm font-medium text-muted-foreground">Scheduled Analyses</h2>
+      <div className="space-y-2">
+        {schedules.map((s) => (
+          <div key={s.id} className="flex items-center justify-between rounded-lg border px-4 py-3">
+            <div>
+              <p className="text-sm font-medium">{s.brand}</p>
+              <p className="text-xs text-muted-foreground">
+                Every {s.interval_days} days · Next run {new Date(s.next_run).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                {s.competitors.length > 0 && ` · vs ${s.competitors.join(", ")}`}
+              </p>
+            </div>
+            <Dialog>
+              <DialogTrigger render={
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                >
+                  Cancel
+                </Button>
+              } />
+              <DialogContent className="sm:max-w-sm">
+                <DialogHeader>
+                  <DialogTitle>Cancel schedule</DialogTitle>
+                  <DialogDescription>
+                    Stop the recurring analysis for {s.brand}? This can't be undone.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <DialogClose render={<Button variant="outline" />}>
+                    Keep
+                  </DialogClose>
+                  <DialogClose render={
+                    <Button
+                      variant="destructive"
+                      onClick={() => removeMutation.mutate(s.id)}
+                      disabled={removeMutation.isPending}
+                    />
+                  }>
+                    Cancel schedule
+                  </DialogClose>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function DashboardPage() {
   const { data: reports, isLoading } = useQuery({
     queryKey: ["reports"],
@@ -202,6 +280,7 @@ export function DashboardPage() {
       </div>
 
       <StatsCards reports={reports ?? []} isLoading={isLoading} />
+      <SchedulesSection />
       <ReportsTable reports={reports ?? []} isLoading={isLoading} />
     </div>
   );

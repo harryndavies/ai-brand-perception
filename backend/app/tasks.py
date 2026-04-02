@@ -223,3 +223,55 @@ def run_analysis(self, report_id: str, brand: str, competitors: list[str], user_
         })
         logger.exception("Analysis failed for report %s", report_id)
         raise self.retry(exc=exc, countdown=5)
+
+
+# ── Scheduled analysis ───────────────────────────────────────────────────────
+
+@celery_app.task(name="app.tasks.process_schedules")
+def process_schedules():
+    """Check for due schedules and dispatch analysis tasks."""
+    import uuid
+    from app.core.progress import init as init_progress
+
+    db = get_sync_db()
+    now = datetime.now(timezone.utc)
+
+    due = list(db.schedules.find({"active": True, "next_run": {"$lte": now}}))
+    for schedule in due:
+        user_id = schedule["user_id"]
+        brand = schedule["brand"]
+        competitors = schedule.get("competitors", [])
+        interval_days = schedule.get("interval_days", 30)
+
+        # Create a report
+        report_id = str(uuid.uuid4())
+        db.reports.insert_one({
+            "_id": report_id,
+            "user_id": user_id,
+            "brand": brand,
+            "competitors": competitors,
+            "status": "processing",
+            "sentiment_score": None,
+            "pillars": [],
+            "model_perceptions": [],
+            "competitor_positions": [],
+            "trend_data": [],
+            "created_at": now,
+            "completed_at": None,
+        })
+
+        init_progress(report_id, ["analysis"])
+        run_analysis.delay(report_id, brand, competitors, user_id)
+
+        # Advance next_run
+        from datetime import timedelta
+        db.schedules.update_one(
+            {"_id": schedule["_id"]},
+            {"$set": {"next_run": now + timedelta(days=interval_days)}},
+        )
+
+        logger.info(
+            "Dispatched scheduled analysis for %s (schedule %s)",
+            brand,
+            schedule["_id"],
+        )

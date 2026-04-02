@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -25,6 +26,7 @@ export function NewAnalysisDialog({ trigger }: { trigger: React.ReactElement }) 
   const [open, setOpen] = useState(false);
   const [brand, setBrand] = useState("");
   const [competitors, setCompetitors] = useState(["", "", ""]);
+  const [repeatMonthly, setRepeatMonthly] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [status, setStatus] = useState<JobStatus>("idle");
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -36,6 +38,7 @@ export function NewAnalysisDialog({ trigger }: { trigger: React.ReactElement }) 
   function reset() {
     setBrand("");
     setCompetitors(["", "", ""]);
+    setRepeatMonthly(false);
     setIsRunning(false);
     setStatus("idle");
     eventSourceRef.current?.close();
@@ -75,9 +78,13 @@ export function NewAnalysisDialog({ trigger }: { trigger: React.ReactElement }) 
   );
 
   const mutation = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const filteredCompetitors = competitors.filter((c) => c.trim());
-      return api.reports.create(brand.trim(), filteredCompetitors);
+      const report = await api.reports.create(brand.trim(), filteredCompetitors);
+      if (repeatMonthly) {
+        await api.schedules.create(brand.trim(), filteredCompetitors, 30);
+      }
+      return report;
     },
     onSuccess: (report) => {
       connectSSE(report.id);
@@ -163,6 +170,18 @@ export function NewAnalysisDialog({ trigger }: { trigger: React.ReactElement }) 
                     onChange={(e) => updateCompetitor(i, e.target.value)}
                   />
                 ))}
+              </div>
+
+              <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                <div>
+                  <Label htmlFor="repeat" className="text-sm font-medium">Repeat monthly</Label>
+                  <p className="text-xs text-muted-foreground">Auto-run this analysis every 30 days</p>
+                </div>
+                <Switch
+                  id="repeat"
+                  checked={repeatMonthly}
+                  onCheckedChange={setRepeatMonthly}
+                />
               </div>
 
               <Button type="submit" className="w-full" disabled={!brand.trim()}>

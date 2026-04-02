@@ -10,7 +10,7 @@ from app.core.config import CORS_ORIGINS
 from app.core.database import init_db  # async — creates MongoDB indexes
 from app.core.logging import setup_logging
 from app.middleware import CorrelationMiddleware
-from app.routes import auth, reports
+from app.routes import auth, reports, schedules
 
 setup_logging()
 
@@ -36,6 +36,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(reports.router)
+app.include_router(schedules.router)
 
 
 @app.get("/api/health")

@@ -56,3 +56,13 @@ export interface User {
   team: string;
   has_api_key: boolean;
 }
+
+export interface Schedule {
+  id: string;
+  brand: string;
+  competitors: string[];
+  interval_days: number;
+  next_run: string;
+  active: boolean;
+  created_at: string;
+}
