@@ -80,6 +80,16 @@ A brand intelligence platform that analyses how brands are perceived across mult
 
    The Vite dev server proxies `/api` requests to the backend automatically.
 
+### Docker
+
+Alternatively, run everything with Docker Compose:
+
+```bash
+docker compose up --build
+```
+
+This starts the frontend (nginx on port 3000), backend (port 8000), and Redis. The nginx config proxies `/api` requests to the backend and handles SPA routing.
+
 ### Available Scripts
 
 | Command | Description |
