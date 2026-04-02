@@ -35,9 +35,45 @@ def _get_client(user_id: str) -> anthropic.Anthropic:
 
 ANALYSIS_PROMPT = """Analyse the brand "{brand}" with competitors [{competitors}].
 
+Score every dimension using the rubrics below. Apply the criteria strictly and consistently.
+
+SCORING RUBRICS:
+
+Brand Recognition (1-10):
+  1-3: Unknown or frequently confused with others
+  4-6: Known within its category but not top-of-mind
+  7-10: Category leader, immediately recognised
+
+Sentiment (1-10):
+  1-3: Predominantly negative associations, controversies, or warnings
+  4-6: Mixed or neutral perception
+  7-10: Strongly positive, recommended, or aspirational
+
+Innovation (1-10):
+  1-3: Seen as stagnant or derivative
+  4-6: Keeps pace with the market but doesn't lead
+  7-10: Widely cited as an innovator or disruptor
+
+Value Perception (1-10):
+  1-3: Seen as overpriced or poor value
+  4-6: Fairly priced for what it offers
+  7-10: Seen as excellent value or worth a premium
+
+Market Positioning (1-10):
+  1-3: Weak position, easily substituted
+  4-6: Established but faces strong competition
+  7-10: Dominant or clearly differentiated position
+
 Return a single JSON object with exactly this structure. Do not include any text outside the JSON.
 
 {{
+  "scores": {{
+    "brand_recognition": <int 1-10>,
+    "sentiment": <int 1-10>,
+    "innovation": <int 1-10>,
+    "value_perception": <int 1-10>,
+    "market_positioning": <int 1-10>
+  }},
   "brand_perception": {{
     "summary": "2-3 sentence analysis of how this brand is perceived",
     "sentiment": <float between -1.0 and 1.0>,
@@ -143,6 +179,7 @@ def run_analysis(self, report_id: str, brand: str, competitors: list[str], user_
         message = client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=2048,
+            temperature=0,
             messages=[{"role": "user", "content": prompt}],
         )
         result = _parse_json(message.content[0].text)
@@ -163,6 +200,7 @@ def run_analysis(self, report_id: str, brand: str, competitors: list[str], user_
             for label, section in sections
         ]
 
+        scores = result.get("scores", {})
         pillars = result.get("pillars", [])
         competitor_positions = result.get("competitor_analysis", {}).get("competitor_positions", [])
 
@@ -179,6 +217,7 @@ def run_analysis(self, report_id: str, brand: str, competitors: list[str], user_
             {"$set": {
                 "status": "complete",
                 "sentiment_score": avg_sentiment,
+                "scores": scores,
                 "pillars": pillars,
                 "model_perceptions": model_perceptions,
                 "competitor_positions": competitor_positions,

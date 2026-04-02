@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScoreCard } from "@/components/report/score-card";
 import { SentimentGauge } from "@/components/report/sentiment-gauge";
 import { PillarCards } from "@/components/report/pillar-cards";
 import { ModelComparison } from "@/components/report/model-comparison";
@@ -58,6 +59,8 @@ function ReportContent({ report }: { report: BrandReport }) {
           Back to Dashboard
         </Button>
       </div>
+
+      {report.scores && <ScoreCard scores={report.scores} />}
 
       <SentimentGauge score={report.sentiment_score!} brand={report.brand} />
 

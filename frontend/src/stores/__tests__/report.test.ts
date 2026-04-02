@@ -8,6 +8,7 @@ const mockReport: BrandReport = {
   competitors: ["Adidas"],
   status: "complete",
   sentiment_score: 0.7,
+  scores: null,
   pillars: [],
   model_perceptions: [],
   competitor_positions: [],

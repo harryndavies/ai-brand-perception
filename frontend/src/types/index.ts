@@ -28,12 +28,21 @@ export interface TrendPoint {
   volume: number;
 }
 
+export interface BrandScores {
+  brand_recognition: number;
+  sentiment: number;
+  innovation: number;
+  value_perception: number;
+  market_positioning: number;
+}
+
 export interface BrandReport {
   id: string;
   brand: string;
   competitors: string[];
   status: AnalysisStatus;
   sentiment_score: number | null;
+  scores: BrandScores | null;
   pillars: BrandPillar[];
   model_perceptions: ModelPerception[];
   competitor_positions: CompetitorPosition[];

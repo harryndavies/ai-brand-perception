@@ -12,6 +12,7 @@ class Report(BaseModel):
     competitors: list[str] = []
     status: str = "pending"
     sentiment_score: Optional[float] = None
+    scores: dict = {}
     pillars: list[dict] = []
     model_perceptions: list[dict] = []
     competitor_positions: list[dict] = []
