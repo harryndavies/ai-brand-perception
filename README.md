@@ -1,6 +1,12 @@
 # Perception AI
 
-A brand intelligence platform that analyses how brands are perceived using Claude AI. It generates comprehensive reports covering sentiment analysis, brand pillar identification, competitive positioning, and historical trend tracking — with optional recurring scheduled analyses via Celery Beat.
+A brand intelligence platform that tracks how AI models perceive brands — helping marketing teams understand and monitor their presence in AI-generated recommendations, search results, and conversations.
+
+## Why AI Brand Perception Matters
+
+As consumers increasingly use ChatGPT, Claude, and Gemini for product research and buying decisions, **how AI perceives your brand is becoming as important as traditional SEO**. If someone asks an AI "what's the best project management tool?" and your product isn't mentioned — or is positioned poorly — that's lost revenue.
+
+Perception AI gives brands visibility into this blind spot. It analyses how Claude perceives a brand across three dimensions — brand identity, news sentiment, and competitive positioning — and tracks how that perception shifts over time as models are retrained. With scheduled recurring analyses, teams can monitor their AI presence the same way they monitor search rankings.
 
 ## Architecture
 
