@@ -1,77 +1,94 @@
+import ky, { HTTPError } from "ky";
 import { useAuthStore } from "@/stores/auth";
-import type { BrandReport, User, Schedule, ModelInfo } from "@/types";
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? "/api";
+const ENV_URL = import.meta.env.VITE_API_URL ?? "/api";
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const token = useAuthStore.getState().token;
-  const res = await fetch(`${BASE_URL}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options?.headers,
-    },
-  });
+/** Resolve to an absolute URL so ky's prefixUrl works in all environments. */
+const BASE_URL = ENV_URL.startsWith("http")
+  ? ENV_URL
+  : `${globalThis.location?.origin ?? "http://localhost"}${ENV_URL}`;
 
-  if (res.status === 401) {
-    useAuthStore.getState().logout();
-    throw new Error("Unauthorized");
-  }
+/**
+ * Pre-configured ky instance for the Perception AI backend.
+ *
+ * - Injects Bearer token via beforeRequest hook
+ * - Handles 401 by logging out and throwing
+ * - Parses backend error `detail` from response body
+ * - Retries failed requests twice with exponential backoff
+ * - 30 second request timeout
+ */
+export const api = ky.create({
+  prefixUrl: BASE_URL,
+  timeout: 30_000,
+  retry: {
+    limit: 2,
+    statusCodes: [408, 500, 502, 503, 504],
+  },
+  hooks: {
+    beforeRequest: [
+      (request) => {
+        const token = useAuthStore.getState().token;
+        if (token) {
+          request.headers.set("Authorization", `Bearer ${token}`);
+        }
+      },
+    ],
+    afterResponse: [
+      async (_request, _options, response) => {
+        if (response.status === 401) {
+          useAuthStore.getState().logout();
+          throw new Error("Unauthorized");
+        }
+      },
+    ],
+    beforeError: [
+      async (error) => {
+        const { response } = error;
+        if (response) {
+          const body = await response.json().catch(() => null) as { detail?: string } | null;
+          if (body?.detail) {
+            error.message = body.detail;
+          }
+        }
+        return error;
+      },
+    ],
+  },
+});
 
-  if (!res.ok) {
-    throw new Error(`API error: ${res.status}`);
-  }
-
-  return res.json();
+/**
+ * Type-safe GET/POST/PUT/DELETE helpers that return parsed JSON.
+ *
+ * Use these in service files instead of calling `api` directly,
+ * so return types are inferred.
+ */
+export function get<T>(path: string): Promise<T> {
+  return api.get(path).json<T>();
 }
 
-export const api = {
-  auth: {
-    login: (email: string, password: string) =>
-      request<{ user: User; token: string }>("/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ email, password }),
-      }),
-    signup: (name: string, email: string, password: string) =>
-      request<{ user: User; token: string }>("/auth/signup", {
-        method: "POST",
-        body: JSON.stringify({ name, email, password }),
-      }),
-    me: () => request<User>("/auth/me"),
-    setApiKey: (provider: string, api_key: string) =>
-      request<{ provider: string; saved: boolean }>("/auth/api-key", {
-        method: "PUT",
-        body: JSON.stringify({ provider, api_key }),
-      }),
-    deleteApiKey: (provider: string) =>
-      request<{ provider: string; removed: boolean }>(`/auth/api-key/${provider}`, {
-        method: "DELETE",
-      }),
-  },
-  reports: {
-    list: () => request<BrandReport[]>("/reports"),
-    get: (id: string) => request<BrandReport>(`/reports/${id}`),
-    models: () => request<ModelInfo[]>("/reports/models"),
-    create: (brand: string, competitors: string[], models: string[]) =>
-      request<BrandReport>("/reports", {
-        method: "POST",
-        body: JSON.stringify({ brand, competitors, models }),
-      }),
-    stream: (id: string): EventSource => {
-      const token = useAuthStore.getState().token;
-      const url = `${BASE_URL}/reports/${id}/stream?token=${token}`;
-      return new EventSource(url);
-    },
-  },
-  schedules: {
-    list: () => request<Schedule[]>("/schedules"),
-    create: (brand: string, competitors: string[], models: string[], interval_days: number) =>
-      request<Schedule>("/schedules", {
-        method: "POST",
-        body: JSON.stringify({ brand, competitors, models, interval_days }),
-      }),
-    remove: (id: string) =>
-      request<{ ok: boolean }>(`/schedules/${id}`, { method: "DELETE" }),
-  },
-};
+export function post<T>(path: string, body: unknown): Promise<T> {
+  return api.post(path, { json: body }).json<T>();
+}
+
+export function put<T>(path: string, body: unknown): Promise<T> {
+  return api.put(path, { json: body }).json<T>();
+}
+
+export function del<T>(path: string): Promise<T> {
+  return api.delete(path).json<T>();
+}
+
+/**
+ * Create an SSE EventSource connection to the backend.
+ *
+ * The token is passed as a query parameter because the EventSource API
+ * does not support custom headers.
+ */
+export function createEventSource(path: string): EventSource {
+  const token = useAuthStore.getState().token;
+  const url = `${BASE_URL}${path}?token=${token}`;
+  return new EventSource(url);
+}
+
+/** Re-export HTTPError so services can catch it if needed. */
+export { HTTPError };

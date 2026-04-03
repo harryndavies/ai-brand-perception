@@ -1,6 +1,21 @@
-export type AnalysisStatus = "pending" | "processing" | "complete" | "failed";
+export const AnalysisStatus = {
+  PENDING: "pending",
+  PROCESSING: "processing",
+  COMPLETE: "complete",
+  FAILED: "failed",
+} as const;
 
-export type JobStatus = "idle" | "pending" | "running" | "complete" | "failed";
+export type AnalysisStatus = (typeof AnalysisStatus)[keyof typeof AnalysisStatus];
+
+export const JobStatus = {
+  IDLE: "idle",
+  PENDING: "pending",
+  RUNNING: "running",
+  COMPLETE: "complete",
+  FAILED: "failed",
+} as const;
+
+export type JobStatus = (typeof JobStatus)[keyof typeof JobStatus];
 
 export interface BrandPillar {
   name: string;
