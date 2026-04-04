@@ -8,6 +8,17 @@ As consumers increasingly use ChatGPT, Claude, and Gemini for product research a
 
 Perception AI gives brands visibility into this blind spot. It analyses how multiple AI models perceive a brand across three dimensions — brand identity, news sentiment, and competitive positioning — and tracks how that perception shifts over time as models are retrained. With scheduled recurring analyses, teams can monitor their AI presence the same way they monitor search rankings.
 
+## Screenshots
+
+<img width="1435" height="743" alt="image" src="https://github.com/user-attachments/assets/6cf51fe9-844f-4100-97a2-634b83d84cfd" />
+
+<img width="1433" height="738" alt="image" src="https://github.com/user-attachments/assets/f17de518-b969-4de4-aceb-53a214973945" />
+
+<img width="1434" height="741" alt="image" src="https://github.com/user-attachments/assets/313d55ca-1c2e-41f3-b2bd-05d8baae041e" />
+
+<img width="1439" height="739" alt="image" src="https://github.com/user-attachments/assets/19bdda35-389a-460b-8006-f0e71825e1ff" />
+
+
 ## Architecture
 
 ```
